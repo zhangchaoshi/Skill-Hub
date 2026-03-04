@@ -1,0 +1,22 @@
+{
+  "name": "skills",
+  "owner": {
+    "name": "zcs",
+    "email": "2315872367@qq.com"
+  },
+  "metadata": {
+    "description": "Personal collection of Claude Code skills for development workflow enhancement",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "meeting-summary",
+      "description": "智能会议总结助手 - 将会议录音/内容整理成结构化会议纪要",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/meeting-summary"
+      ]
+    }
+  ]
+}

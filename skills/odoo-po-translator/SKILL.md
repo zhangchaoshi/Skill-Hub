@@ -1,6 +1,6 @@
 ---
 name: odoo-po-translator
-description: 用于 Odoo .po 文件的简体中文汉化和翻译质量检查。自动翻译空条目、辅助翻译/校对、检测翻译质量问题。支持超大文件（>256KB）的分块处理。保持占位符格式、处理复数形式、维护术语一致性。当用户需要翻译 .po 文件、检查 po 文件质量、汉化 Odoo 模块、处理 Odoo 国际化文件、翻译 msgid 为 msgstr、或需要保持 Odoo 术语翻译一致性时使用此技能。
+description: 用于 Odoo .po 文件的简体中文汉化和翻译质量检查。自动翻译空条目、辅助翻译/校对、检测翻译质量问题。支持超大文件（>256KB）的分块处理，在处理超大文件时自动检查并设置 Python 环境（检测 Python 和虚拟环境，不存在则使用 uv 下载安装并创建虚拟环境）。保持占位符格式、处理复数形式、维护术语一致性。当用户需要翻译 .po 文件、检查 po 文件质量、汉化 Odoo 模块、处理 Odoo 国际化文件、翻译 msgid 为 msgstr、或需要保持 Odoo 术语翻译一致性时使用此技能。
 ---
 
 # Odoo .po 文件简体中文汉化
@@ -51,6 +51,77 @@ msgstr[1] "%(count)s 个文件"
 **翻译块完整性** - 保持文本在单个块中，不要分割字符串。
 
 ## 工作流程
+
+### Python 环境设置（超大文件处理前必先执行）
+
+**在处理超大文件（>256KB）之前，必须先确保 Python 环境已正确配置。**
+
+#### 环境检查流程
+
+执行以下检查命令，确保 Python 环境就绪：
+
+```bash
+# 1. 检查 Python 是否已安装
+python --version 2>/dev/null || python3 --version
+```
+
+**如果 Python 不存在**，执行以下步骤：
+
+```bash
+# Windows 下检查 uv 是否已安装
+uv --version 2>/dev/null
+
+# 如果 uv 不存在，下载并安装 uv
+# Windows (PowerShell):
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Linux/macOS:
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 安装后刷新 PATH（可能需要重新打开终端）
+```
+
+```bash
+# 2. 检查虚拟环境是否存在
+# 在技能目录下检查
+cd skills/odoo-po-translator
+
+if [ -d ".venv" ]; then
+    echo "虚拟环境已存在"
+    source .venv/bin/activate  # Linux/macOS
+    # 或 source .venv/Scripts/activate  # Windows
+else
+    echo "虚拟环境不存在，使用 uv 创建"
+    uv venv
+    source .venv/bin/activate  # 激活环境
+fi
+```
+
+#### Windows 环境特殊处理
+
+在 Windows 环境下：
+
+```powershell
+# PowerShell 中激活虚拟环境
+.\.venv\Scripts\activate.ps1
+
+# 如果执行策略限制，先运行：
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+#### 环境验证
+
+创建虚拟环境后，验证脚本可执行性：
+
+```bash
+# 测试脚本是否可运行
+python scripts/po_splitter.py --help
+python scripts/translate_chunk.py --help
+```
+
+**注意**：本技能的脚本仅依赖 Python 标准库，无需安装额外的 pip 包。
+
+---
 
 ### 超大文件检测（新增）
 

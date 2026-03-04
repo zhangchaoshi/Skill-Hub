@@ -10,17 +10,8 @@
   },
   "plugins": [
     {
-      "name": "meeting-summary",
-      "description": "智能会议总结助手 - 将会议录音/内容整理成结构化会议纪要",
-      "source": "./",
-      "strict": false,
-      "skills": [
-        "./skills/meeting-summary"
-      ]
-    },
-    {
       "name": "odoo-po-translator",
-      "description": "Odoo .po 文件简体中文汉化工具 - 自动翻译、质量检查、术语一致性维护",
+      "description": "用于 Odoo .po 文件的简体中文汉化和翻译质量检查。自动翻译空条目、辅助翻译/校对、检测翻译质量问题。支持超大文件（>256KB）的分块处理，在处理超大文件时自动检查并设置 Python 环境（检测 Python 和虚拟环境，不存在则使用 uv 下载安装并创建虚拟环境）。保持占位符格式、处理复数形式、维护术语一致性。",
       "source": "./",
       "strict": false,
       "skills": [

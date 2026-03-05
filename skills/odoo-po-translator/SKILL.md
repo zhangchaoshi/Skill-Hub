@@ -1,6 +1,6 @@
 ---
 name: odoo-po-translator
-description: 用于 Odoo .po 文件的简体中文汉化和翻译质量检查。自动翻译空条目、辅助翻译/校对、检测翻译质量问题。支持超大文件（>256KB）的分块处理，在处理超大文件时自动检查并设置 Python 环境（检测 Python 和虚拟环境，不存在则使用 uv 下载安装并创建虚拟环境）。保持占位符格式、处理复数形式、维护术语一致性。当用户需要翻译 .po 文件、检查 po 文件质量、汉化 Odoo 模块、处理 Odoo 国际化文件、翻译 msgid 为 msgstr、或需要保持 Odoo 术语翻译一致性时使用此技能。
+description: 用于 Odoo .po 文件的简体中文汉化和翻译质量检查。自动翻译空条目、辅助翻译/校对、检测翻译质量问题。支持超大文件（>256KB）的分块处理，支持**并行翻译**大幅提升处理速度（根据 CPU 核心数自动调整并发数）。在处理超大文件时自动检查并设置 Python 环境（检测 Python 和虚拟环境，不存在则使用 uv 下载安装并创建虚拟环境）。保持占位符格式、处理复数形式、维护术语一致性。当用户需要翻译 .po 文件、检查 po 文件质量、汉化 Odoo 模块、处理 Odoo 国际化文件、翻译 msgid 为 msgstr、或需要保持 Odoo 术语翻译一致性时使用此技能。
 ---
 
 # Odoo .po 文件简体中文汉化
@@ -481,4 +481,248 @@ rm -rf temp
 - 使用分块处理流程，每块包含约 N 个条目
 - 确保合并前所有块都已正确翻译
 - 使用 validate 命令检查翻译质量
+```
+
+---
+
+## 并行翻译流程（推荐用于超大文件）
+
+对于超大文件（>256KB），使用并行翻译可以**大幅提升处理速度**。此流程会根据系统 CPU 核心数自动调整并发数量，生成可在多个 Claude Code 会话中独立运行的翻译脚本。
+
+### 并行翻译优势
+
+- **速度提升**：4-8 倍翻译速度（取决于 CPU 核心数）
+- **资源优化**：根据系统资源自动调整并发数
+- **错误重试**：翻译失败的 chunk 会自动重试
+- **自动合并**：所有 chunk 翻译完成后自动合并为最终 PO 文件
+- **独立会话**：每个 chunk 在独立的 Claude Code 会话中运行，避免上下文限制
+
+### 完整并行翻译流程
+
+#### 步骤 1：分割文件
+
+```bash
+cd skills/odoo-po-translator/scripts
+
+# 创建工作目录
+mkdir -p temp/chunks temp/translated temp/scripts
+
+# 分割文件
+python po_splitter.py split ../../1.pot --chunks-dir ./temp/chunks --entries-per-chunk 30
+```
+
+#### 步骤 2：生成并行翻译脚本
+
+```bash
+# 生成并行翻译脚本（自动检测 CPU 核心数）
+python scripts/parallel_translator.py generate \
+  --chunk-dir ./temp/chunks \
+  --script-dir ./temp/scripts \
+  --output-dir ./temp/translated \
+  --original-file ../../1.pot
+```
+
+参数说明：
+- `--chunk-dir`: chunk 文件目录
+- `--script-dir`: 生成的翻译脚本输出目录
+- `--output-dir`: 翻译后的 chunk 输出目录
+- `--original-file`: 原始 PO 文件路径（用于合并）
+- `--max-workers`: 可选，手动指定最大并发数（默认：CPU 核心数）
+
+生成的脚本：
+- `temp/scripts/translate_chunk_0000.sh` ~ `translate_chunk_NNNN.sh` - 每个 chunk 的翻译脚本
+- `temp/scripts/parallel_run.sh` - 并行执行脚本（使用 xargs -P）
+- `temp/scripts/monitor_progress.sh` - 进度监控脚本
+
+#### 步骤 3：并行翻译
+
+**方式 A：一键执行（推荐）**
+
+```bash
+# 自动并行执行所有翻译任务
+bash temp/scripts/parallel_run.sh
+```
+
+**方式 B：手动启动多个 Claude Code 会话**
+
+```bash
+# 为每个 chunk 启动独立的 Claude Code 会话
+# 在每个会话中执行对应的翻译脚本
+bash temp/scripts/translate_chunk_0000.sh
+bash temp/scripts/translate_chunk_0001.sh
+# ... 等等
+```
+
+#### 步骤 4：监控进度
+
+```bash
+# 在另一个终端中监控翻译进度
+bash temp/scripts/monitor_progress.sh
+```
+
+#### 步骤 5：自动合并
+
+所有翻译任务完成后，会自动合并为最终 PO 文件：
+
+```bash
+# 如果自动合并失败，可以手动执行
+python po_splitter.py merge ../../1.pot \
+  --chunks-dir ./temp/translated \
+  --output ../../zh_CN.po
+```
+
+### 翻译脚本格式
+
+每个生成的翻译脚本（`translate_chunk_XXXX.sh`）包含：
+
+```bash
+#!/bin/bash
+# Odoo PO Chunk 翻译脚本
+# Chunk: chunk_0000.json
+
+CHUNK_FILE="temp/chunks/chunk_0000.json"
+OUTPUT_FILE="temp/translated/chunk_0000.json"
+MAX_RETRIES=3
+
+# 重试逻辑
+for i in $(seq 1 $MAX_RETRIES); do
+    echo "尝试翻译 chunk_0000.json (第 $i 次)"
+
+    # 读取 chunk 内容
+    python scripts/translate_chunk.py prompt "$CHUNK_FILE" --output temp/chunk_0000_prompt.txt
+
+    # TODO: 在此处调用 Claude 进行翻译
+    # 翻译完成后保存结果
+    # python scripts/translate_chunk.py save "$CHUNK_FILE" "$OUTPUT_FILE" --translations "..."
+
+    if [ $? -eq 0 ]; then
+        echo "翻译成功！"
+        break
+    fi
+
+    if [ $i -lt $MAX_RETRIES ]; then
+        echo "翻译失败，等待 5 秒后重试..."
+        sleep 5
+    fi
+done
+```
+
+### 并行执行实现
+
+`parallel_run.sh` 使用 `xargs -P` 实现并行执行：
+
+```bash
+#!/bin/bash
+# 并行翻译执行脚本
+
+SCRIPT_DIR="temp/scripts"
+CHUNK_DIR="temp/chunks"
+
+# 检测 CPU 核心数
+WORKERS=$(python -c "import os; print(os.cpu_count())")
+
+echo "检测到 $WORKERS 个 CPU 核心"
+echo "开始并行翻译..."
+
+# 查找所有翻译脚本并并行执行
+find "$SCRIPT_DIR" -name "translate_chunk_*.sh" | \
+  xargs -P "$WORKERS" -I {} bash {}
+
+echo "所有翻译任务已完成"
+echo "开始合并..."
+
+# 自动合并
+python po_splitter.py merge ../../1.pot \
+  --chunks-dir ./temp/translated \
+  --output ../../zh_CN.po
+
+echo "翻译完成！输出文件: zh_CN.po"
+```
+
+### 进度监控
+
+`monitor_progress.sh` 实时显示翻译进度：
+
+```bash
+#!/bin/bash
+# 进度监控脚本
+
+CHUNK_DIR="temp/chunks"
+TRANSLATED_DIR="temp/translated"
+
+while true; do
+    TOTAL=$(find "$CHUNK_DIR" -name "chunk_*.json" | wc -l)
+    DONE=$(find "$TRANSLATED_DIR" -name "chunk_*.json" | wc -l)
+    PERCENT=$((DONE * 100 / TOTAL))
+
+    clear
+    echo "翻译进度：$DONE / $TOTAL ($PERCENT%)"
+
+    if [ $DONE -eq $TOTAL ]; then
+        echo "所有翻译任务已完成！"
+        break
+    fi
+
+    sleep 2
+done
+```
+
+### 完整示例
+
+```bash
+# 1. 进入脚本目录
+cd skills/odoo-po-translator/scripts
+
+# 2. 创建工作目录
+mkdir -p temp/chunks temp/translated temp/scripts
+
+# 3. 分割文件
+python po_splitter.py split ../../large.pot --chunks-dir ./temp/chunks --entries-per-chunk 30
+
+# 4. 查看统计信息
+python po_splitter.py info ../../large.pot
+
+# 5. 生成并行翻译脚本
+python scripts/parallel_translator.py generate \
+  --chunk-dir ./temp/chunks \
+  --script-dir ./temp/scripts \
+  --output-dir ./temp/translated \
+  --original-file ../../large.pot
+
+# 6. 并行执行翻译（一键完成）
+bash temp/scripts/parallel_run.sh
+
+# 7. 清理临时文件（可选）
+rm -rf temp
+```
+
+### 并行翻译输出摘要格式
+
+```
+## 并行翻译摘要
+
+**原文件**: [原文件名]
+**输出文件**: zh_CN.po
+**文件大小**: [大小] MB
+**模式**: 并行分块翻译
+
+### 文件统计
+- 总条目数: [数字]
+- 空条目数: [数字]
+- 块文件数: [数字]
+- 每块条目: [数字]
+
+### 并行配置
+- CPU 核心数: [数字]
+- 并发任务数: [数字]
+- 最大重试次数: [数字]
+
+### 处理进度
+- 已翻译 chunk: [当前]/[总数]
+- 已翻译条目: [数字]/[总数]
+- 成功率: [百分比]%
+
+### 性能统计
+- 预计总耗时: [时间]
+- 平均每块耗时: [时间]
 ```

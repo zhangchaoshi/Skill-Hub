@@ -48,3 +48,5 @@ tmp/
 
 # Claude Code
 .claude/worktrees/
+
+sandbox/

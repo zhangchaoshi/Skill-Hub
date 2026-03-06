@@ -50,3 +50,10 @@ tmp/
 .claude/worktrees/
 
 sandbox/
+
+# Firecrawl outputs (raw crawl/download artifacts)
+.firecrawl/
+
+# Local env (do not commit secrets)
+.env
+.env.*
